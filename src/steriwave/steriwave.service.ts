@@ -32,33 +32,75 @@ export class SteriWaveService {
     id: sterilizerId,
   };
 }
+async getAllSterilizers(role: string, email: string) {
+  const db = this.firebase.db;
+  const rtdb = this.firebase.rtdb;
 
+  if (role === 'supervisor') {
+    const snapshot = await db.collection('sterilizers').get();
+    const firestoreDocs = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter((doc: any) => !doc.venduepour) as any[];
 
-  async getAllSterilizers(role: string, email: string) {
-    const db = this.firebase.db;
-  
-    if (role === 'supervisor') {
-      // 🔹 Récupérer tous les sterilizers non assignés
-      const snapshot = await db.collection('sterilizers').get();
-      return snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((doc: any) => !doc.venduepour);
-    }
-  
-    if (role === 'visor') {
-      // 🔹 Récupérer uniquement les sterilizers de ce visor qui ne sont pas encore vendus
-      const snapshot = await db.collection('sterilizersvendue')
-        .where('admin', '==', email)
-        .where('vendue', '==', false)
-        .get();
-    
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-    
-  
-    return []; // aucun rôle reconnu
+    const enriched = await Promise.all(
+      firestoreDocs.map(async (doc) => {
+        const deviceId = doc.device_id || doc.deviceId || doc.id;
+        if (!deviceId) return doc;
+
+        let model = 'N/A';
+        let firmwareVersion = 'N/A';
+        let registeredAt = doc.registeredAt || 'N/A';
+
+        try {
+          // ✅ Lire model et firmware depuis /register
+          const registerSnap = await rtdb
+            .ref(`steriwave/devices/${deviceId}/register`)
+            .get();
+
+          if (registerSnap.exists()) {
+            const data = registerSnap.val();
+            model = data.model || 'N/A';
+            firmwareVersion = data.firmware_version || 'N/A';
+          }
+
+          // ✅ Lire timestamp depuis /heartbeat comme registeredAt
+          const heartbeatSnap = await rtdb
+            .ref(`steriwave/devices/${deviceId}/heartbeat`)
+            .get();
+
+          if (heartbeatSnap.exists()) {
+            const hbData = heartbeatSnap.val();
+            registeredAt = hbData.timestamp || doc.registeredAt || 'N/A';
+          }
+
+        } catch (e) {
+          console.warn(`⚠️ RTDB introuvable pour ${deviceId}`);
+        }
+
+        return {
+          ...doc,
+          deviceId,
+          model,
+          firmwareVersion,
+          registeredAt,
+        };
+      })
+    );
+
+    return enriched;
   }
-  
+
+  if (role === 'visor') {
+    const snapshot = await db.collection('sterilizersvendue')
+      .where('admin', '==', email)
+      .where('vendue', '==', false)
+      .get();
+
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
+  return [];
+}
   async syncSterilizersFromRealtime() {
   const dbRealtime = this.firebase.rtdb;
   const dbFirestore = this.firebase.db;

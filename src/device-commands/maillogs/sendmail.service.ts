@@ -6,10 +6,19 @@ import { stringify } from 'csv-stringify/sync';
 
 @Injectable()
 export class SendMailService {
-  constructor(private configService: ConfigService) {}
+  private transporter: nodemailer.Transporter;
+
+  constructor(private configService: ConfigService) {
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: this.configService.get<string>('EMAIL_USER'),
+        pass: this.configService.get<string>('EMAIL_PASS'),
+      },
+    });
+  }
 
   async sendMail(sourceEmail: string, to: string) {
-    // 1. 🔁 Appeler l’API qui retourne l’historique
     const response = await axios.get(
       `http://localhost:3000/historique/by-user?email=${sourceEmail}`,
     );
@@ -20,7 +29,6 @@ export class SendMailService {
       throw new Error("Aucun historique trouvé.");
     }
 
-    // 2. 🧾 Générer le CSV
     const csv = stringify(historique, {
       header: true,
       columns: [
@@ -34,16 +42,6 @@ export class SendMailService {
       ],
     });
 
-    // 3. 📧 Créer le transport
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASS'),
-      },
-    });
-
-    // 4. ✉️ Définir le contenu du mail
     const mailOptions = {
       from: this.configService.get<string>('EMAIL_USER'),
       to,
@@ -57,6 +55,6 @@ export class SendMailService {
       ],
     };
 
-    return await transporter.sendMail(mailOptions);
+    return await this.transporter.sendMail(mailOptions);
   }
 }

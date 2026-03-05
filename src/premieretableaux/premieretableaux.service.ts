@@ -68,15 +68,13 @@ export class PremieretableauxService {
 
 for (const sterilizer of sterilizers) {
   // 🔹 1. Met à jour /sterilizers
-  const globalQuery = await db.collection('sterilizers')
-    .where('deviceId', '==', sterilizer.deviceId)
-    .limit(1)
-    .get();
-
-  if (!globalQuery.empty) {
-    const globalDoc = globalQuery.docs[0];
-    await globalDoc.ref.update({ venduepour: email });
-  }
+const globalRef = db.collection('sterilizers').doc(sterilizer.deviceId);
+const globalDoc = await globalRef.get();
+if (globalDoc.exists) {
+  await globalRef.update({ venduepour: email });
+} else {
+  console.warn(`⚠️ Document ${sterilizer.deviceId} non trouvé dans /sterilizers`);
+}
 
   // 🔹 2. Ajoute dans /users/{userId}/sterilisateurs
   const userSterilizerRef = db.collection('users').doc(userId)
