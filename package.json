@@ -31,6 +31,8 @@
     "amqp-connection-manager": "^4.1.14",
     "amqplib": "^0.10.8",
     "axios": "^1.10.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "csv-stringify": "^6.6.0",
     "date-fns": "^4.1.0",
     "firebase": "^11.9.1",
